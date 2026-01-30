@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "nba-project"
+version = "0.1.0"
+description = "NBA stats dashboard using Streamlit and nba_api"
+authors = ["Tal Agami <agamital@gmail.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.10,<=3.14"
+streamlit = "*"
+pandas = "*"
+requests = "*"
+nba_api = "*"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
