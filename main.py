@@ -1,9 +1,3 @@
-"""
-NBA Analytics Dashboard
-
-A Streamlit application for analyzing NBA statistics, teams, and players.
-Features standings, team analysis, player explorer, and comparison tools.
-"""
 
 import time
 import numpy as np
@@ -54,9 +48,9 @@ except ImportError:
     DEFAULT_LAST_N_GAMES = 20
     DEFAULT_ROLLING_WINDOWS = (5, 10)
 
-# --------------------------------------------------
+
 # App config
-# --------------------------------------------------
+
 st.set_page_config(
     page_title="NBA Analytics Dashboard",
     page_icon="🏀",
@@ -67,9 +61,9 @@ st.set_page_config(
 st.title("🏀 NBA Analytics Dashboard")
 st.caption("Standings • Team Analysis • Player Explorer • Compare & Synergy")
 
-# --------------------------------------------------
+
 # Sidebar Configuration
-# --------------------------------------------------
+
 page = st.sidebar.radio(
     "📊 Navigation",
     ["Standings", "Team", "Player Explorer", "Compare & Synergy"],
@@ -97,9 +91,8 @@ with st.sidebar.expander("🛠️ Settings", expanded=False):
     show_debug = st.checkbox("Show debug info", value=False)
 
 
-# --------------------------------------------------
 # Helper Functions
-# --------------------------------------------------
+
 def throttle(seconds: float = 0.6):
     """Sleep to avoid API rate limits."""
     time.sleep(seconds)
@@ -138,9 +131,8 @@ def metric_row(summary: pd.Series):
     b6.metric("+/-", f"{summary.get('PLUS_MINUS', 0):.1f}" if "PLUS_MINUS" in summary else "—")
 
 
-# --------------------------------------------------
 # State Management
-# --------------------------------------------------
+
 state_key = f"{page}:{season}"
 if st.session_state.get("_state_key") != state_key:
     st.session_state["_state_key"] = state_key
@@ -148,9 +140,9 @@ if st.session_state.get("_state_key") != state_key:
     st.session_state.pop("_last_compare_logs", None)
 
 
-# --------------------------------------------------
+
 # Cached Data Loaders
-# --------------------------------------------------
+
 @st.cache_data(ttl=6 * 60 * 60, persist="disk", show_spinner="Loading standings...")
 def load_standings(season: str) -> pd.DataFrame:
     """Load NBA standings with caching."""
@@ -193,9 +185,9 @@ def load_team_abbr(team_id: int) -> str:
     return get_team_abbr(team_id)
 
 
-# ==================================================
+
 # PAGE: STANDINGS
-# ==================================================
+
 if page == "Standings":
     st.subheader("📊 NBA Standings")
 
@@ -242,18 +234,18 @@ if page == "Standings":
             st.dataframe(west, use_container_width=True, hide_index=True)
 
 
-# ==================================================
+
 # PAGE: TEAM
-# ==================================================
+
 elif page == "Team":
     st.subheader("🏀 Team Analysis")
 
     teams_df = load_teams_static()
     mode = st.radio("Mode", ["Single Team Analysis", "Compare Teams"], horizontal=True)
 
-    # ==================================================
+
     # SINGLE TEAM
-    # ==================================================
+
     if mode == "Single Team Analysis":
         last_n = st.slider("Last N games", 5, 82, DEFAULT_LAST_N_GAMES, key="team_single_last_n")
 
@@ -308,9 +300,9 @@ elif page == "Team":
                 for c in chart_cols:
                     st.line_chart(g[[c]], use_container_width=True)
 
-    # ==================================================
+
     # COMPARE TEAMS
-    # ==================================================
+
     else:
         picks = st.multiselect(
             "Select teams to compare",
@@ -480,9 +472,9 @@ elif page == "Team":
         st.bar_chart(avg_df, use_container_width=True)
 
 
-# ==================================================
+
 # PAGE: PLAYER EXPLORER
-# ==================================================
+
 elif page == "Player Explorer":
     st.subheader("👤 Player Explorer")
 
@@ -624,22 +616,22 @@ elif page == "Player Explorer":
         st.dataframe(log, use_container_width=True, hide_index=True)
 
 
-# ==================================================
+
 # PAGE: COMPARE & SYNERGY
-# ==================================================
+
 else:
     st.subheader("🔄 Compare & Synergy")
 
     t_players, t_teams = st.tabs(["👥 Players Compare", "🏀 Teams Compare"])
 
-    # =========================
+
     # Players Compare
-    # =========================
+
     with t_players:
         st.write("Add players to a pool, organize into groups, filter by date, and analyze synergy.")
 
         if "pool" not in st.session_state:
-            st.session_state.pool = {}  # name -> id
+            st.session_state.pool = {}  
 
         add_mode = st.radio(
             "Add players by",
@@ -648,7 +640,7 @@ else:
             key="cmp_add_mode"
         )
 
-        # Add players - Global Search
+        # Add players 
         if add_mode == "Global Search":
             with st.form("add_player_global_form"):
                 q = st.text_input("Search player to add", key="cmp_q", placeholder="Enter player name")
@@ -671,7 +663,7 @@ else:
                         st.session_state.pool[pick] = pid
                         st.rerun()
 
-        # Add players - Team Roster
+        # Add players - by Team Roster
         else:
             teams_df = load_teams_static()
             team_full = st.selectbox("Team", teams_df["full_name"].tolist(), key="cmp_team")
@@ -1009,7 +1001,7 @@ else:
             )
             st.altair_chart(bar, use_container_width=True)
 
-        # Synergy matrix (optional)
+        # Synergy matrix
         if st.checkbox("Show synergy matrix (correlation on overlapping dates)", value=False):
             st.markdown("## 🔗 Synergy Matrix")
             all_logs = {**logs_a, **logs_b}
@@ -1038,9 +1030,9 @@ else:
             corr = synergy_matrix(all_logs, metric_for_synergy)
             st.dataframe(corr, use_container_width=True)
 
-    # =========================
+
     # Teams Compare
-    # =========================
+
     with t_teams:
         st.write("Compare 2 teams using recent game statistics.")
 
@@ -1118,7 +1110,7 @@ else:
             key="team_metric_pick",
         )
 
-        for m in picks[:6]:  # Limit to 6 charts
+        for m in picks[:6]:  
             a_col = f"A {m}"
             b_col = f"B {m}"
             cols = [c for c in [a_col, b_col] if c in merged.columns]
