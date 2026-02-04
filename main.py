@@ -27,30 +27,19 @@ from nba_client import (
     common_date_window,
 )
 
-# Import constants
-try:
-    from constants import (
-        SEASONS,
-        HEADSHOT_WIDTH,
-        TEAM_LOGO_WIDTH,
-        PLAYER_BASIC_METRICS,
-        TEAM_METRICS,
-        DEFAULT_LAST_N_GAMES,
-        DEFAULT_ROLLING_WINDOWS,
-    )
-except ImportError:
-    # Fallback values
-    SEASONS = ["2025-26", "2024-25", "2023-24", "2022-23"]
-    HEADSHOT_WIDTH = 95
-    TEAM_LOGO_WIDTH = 70
-    PLAYER_BASIC_METRICS = ["PTS", "REB", "AST", "STL", "BLK", "TOV"]
-    TEAM_METRICS = ["PTS", "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M", "REB", "AST", "TOV", "STL", "BLK"]
-    DEFAULT_LAST_N_GAMES = 20
-    DEFAULT_ROLLING_WINDOWS = (5, 10)
+# Configuration Constants (embedded directly)
+SEASONS = ["2025-26", "2024-25", "2023-24", "2022-23"]
+HEADSHOT_WIDTH = 95
+TEAM_LOGO_WIDTH = 70
+PLAYER_BASIC_METRICS = ["PTS", "REB", "AST", "STL", "BLK", "TOV"]
+TEAM_METRICS = ["PTS", "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M", "REB", "AST", "TOV", "STL", "BLK"]
+DEFAULT_LAST_N_GAMES = 20
+DEFAULT_ROLLING_WINDOWS = (5, 10)
 
 
+# --------------------------------------------------
 # App config
-
+# --------------------------------------------------
 st.set_page_config(
     page_title="NBA Analytics Dashboard",
     page_icon="🏀",
@@ -61,9 +50,9 @@ st.set_page_config(
 st.title("🏀 NBA Analytics Dashboard")
 st.caption("Standings • Team Analysis • Player Explorer • Compare & Synergy")
 
-
+# --------------------------------------------------
 # Sidebar Configuration
-
+# --------------------------------------------------
 page = st.sidebar.radio(
     "📊 Navigation",
     ["Standings", "Team", "Player Explorer", "Compare & Synergy"],
@@ -74,15 +63,15 @@ season = st.sidebar.selectbox("🏆 Season", SEASONS, index=0)
 with st.sidebar.expander("ℹ️ About", expanded=False):
     st.markdown("""
     **NBA Analytics Dashboard**
-
+    
     This app uses the `nba_api` library to fetch real-time NBA statistics.
-
+    
     **Features:**
     - Live standings with filters
     - Team analysis & comparison
     - Player statistics & trends
     - Advanced synergy metrics
-
+    
     **Note:** If you encounter timeouts or rate limits, wait 30-60 seconds and refresh.
     Data is cached for 6 hours to improve performance.
     """)
@@ -91,8 +80,9 @@ with st.sidebar.expander("🛠️ Settings", expanded=False):
     show_debug = st.checkbox("Show debug info", value=False)
 
 
+# --------------------------------------------------
 # Helper Functions
-
+# --------------------------------------------------
 def throttle(seconds: float = 0.6):
     """Sleep to avoid API rate limits."""
     time.sleep(seconds)
@@ -131,8 +121,9 @@ def metric_row(summary: pd.Series):
     b6.metric("+/-", f"{summary.get('PLUS_MINUS', 0):.1f}" if "PLUS_MINUS" in summary else "—")
 
 
+# --------------------------------------------------
 # State Management
-
+# --------------------------------------------------
 state_key = f"{page}:{season}"
 if st.session_state.get("_state_key") != state_key:
     st.session_state["_state_key"] = state_key
@@ -140,9 +131,9 @@ if st.session_state.get("_state_key") != state_key:
     st.session_state.pop("_last_compare_logs", None)
 
 
-
+# --------------------------------------------------
 # Cached Data Loaders
-
+# --------------------------------------------------
 @st.cache_data(ttl=6 * 60 * 60, persist="disk", show_spinner="Loading standings...")
 def load_standings(season: str) -> pd.DataFrame:
     """Load NBA standings with caching."""
@@ -185,9 +176,9 @@ def load_team_abbr(team_id: int) -> str:
     return get_team_abbr(team_id)
 
 
-
+# ==================================================
 # PAGE: STANDINGS
-
+# ==================================================
 if page == "Standings":
     st.subheader("📊 NBA Standings")
 
@@ -234,18 +225,18 @@ if page == "Standings":
             st.dataframe(west, use_container_width=True, hide_index=True)
 
 
-
+# ==================================================
 # PAGE: TEAM
-
+# ==================================================
 elif page == "Team":
     st.subheader("🏀 Team Analysis")
 
     teams_df = load_teams_static()
     mode = st.radio("Mode", ["Single Team Analysis", "Compare Teams"], horizontal=True)
 
-
+    # ==================================================
     # SINGLE TEAM
-
+    # ==================================================
     if mode == "Single Team Analysis":
         last_n = st.slider("Last N games", 5, 82, DEFAULT_LAST_N_GAMES, key="team_single_last_n")
 
@@ -293,23 +284,23 @@ elif page == "Team":
             g["GAME_DATE"] = pd.to_datetime(g["GAME_DATE"], errors="coerce")
             g = g.dropna(subset=["GAME_DATE"]).sort_values("GAME_DATE").set_index("GAME_DATE")
 
-            chart_cols = [c for c in ["PTS", "FG3M", "FG_PCT", "FG3_PCT", "FT_PCT", "REB", "AST", "TOV"]
-                          if c in g.columns]
+            chart_cols = [c for c in ["PTS", "FG3M", "FG_PCT", "FG3_PCT", "FT_PCT", "REB", "AST", "TOV"] 
+                         if c in g.columns]
             if chart_cols:
                 st.markdown("### 📈 Team Trends")
                 for c in chart_cols:
                     st.line_chart(g[[c]], use_container_width=True)
 
-
+    # ==================================================
     # COMPARE TEAMS
-
+    # ==================================================
     else:
         picks = st.multiselect(
             "Select teams to compare",
             teams_df["full_name"].tolist(),
             default=teams_df["full_name"].tolist()[:2] if len(teams_df) >= 2 else [],
         )
-
+        
         if len(picks) < 2:
             st.info("📌 Please select at least 2 teams to compare.")
             st.stop()
@@ -319,7 +310,7 @@ elif page == "Team":
             TEAM_METRICS,
             default=["PTS", "FG3M"],
         )
-
+        
         if not metric_picks:
             st.info("📌 Please select at least 1 metric.")
             st.stop()
@@ -472,9 +463,9 @@ elif page == "Team":
         st.bar_chart(avg_df, use_container_width=True)
 
 
-
+# ==================================================
 # PAGE: PLAYER EXPLORER
-
+# ==================================================
 elif page == "Player Explorer":
     st.subheader("👤 Player Explorer")
 
@@ -580,7 +571,7 @@ elif page == "Player Explorer":
 
         st.markdown("### Key Statistics Over Time")
         if "GAME_DATE" in log.columns:
-            base_cols = [c for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV",
+            base_cols = [c for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV", 
                                      "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M"]
                          if c in log.columns]
             if base_cols:
@@ -596,11 +587,11 @@ elif page == "Player Explorer":
 
     with tabs[2]:
         st.markdown("### Rolling Averages")
-        metrics = [c for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV",
-                               "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M"]
+        metrics = [c for c in ["PTS", "REB", "AST", "STL", "BLK", "TOV", 
+                              "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M"]
                    if c in log.columns]
         roll = add_rolling_metrics(log, metrics=metrics, windows=DEFAULT_ROLLING_WINDOWS)
-
+        
         if "GAME_DATE" in roll.columns:
             roll = roll.set_index("GAME_DATE")
             roll_cols = [c for c in roll.columns if c.endswith(("roll5", "roll10"))]
@@ -616,31 +607,31 @@ elif page == "Player Explorer":
         st.dataframe(log, use_container_width=True, hide_index=True)
 
 
-
+# ==================================================
 # PAGE: COMPARE & SYNERGY
-
+# ==================================================
 else:
     st.subheader("🔄 Compare & Synergy")
 
     t_players, t_teams = st.tabs(["👥 Players Compare", "🏀 Teams Compare"])
 
-
+    # =========================
     # Players Compare
-
+    # =========================
     with t_players:
         st.write("Add players to a pool, organize into groups, filter by date, and analyze synergy.")
 
         if "pool" not in st.session_state:
-            st.session_state.pool = {}  
+            st.session_state.pool = {}  # name -> id
 
         add_mode = st.radio(
-            "Add players by",
-            ["Global Search", "Team Roster"],
-            horizontal=True,
+            "Add players by", 
+            ["Global Search", "Team Roster"], 
+            horizontal=True, 
             key="cmp_add_mode"
         )
 
-        # Add players 
+        # Add players - Global Search
         if add_mode == "Global Search":
             with st.form("add_player_global_form"):
                 q = st.text_input("Search player to add", key="cmp_q", placeholder="Enter player name")
@@ -663,7 +654,7 @@ else:
                         st.session_state.pool[pick] = pid
                         st.rerun()
 
-        # Add players - by Team Roster
+        # Add players - Team Roster
         else:
             teams_df = load_teams_static()
             team_full = st.selectbox("Team", teams_df["full_name"].tolist(), key="cmp_team")
@@ -685,8 +676,8 @@ else:
                 st.warning("Roster is empty.")
             else:
                 picks = st.multiselect(
-                    "Select players to add to pool",
-                    roster_ids["PLAYER"].tolist(),
+                    "Select players to add to pool", 
+                    roster_ids["PLAYER"].tolist(), 
                     key="cmp_roster_multi"
                 )
                 for p in picks:
@@ -715,9 +706,9 @@ else:
         ca, cb = st.columns(2)
         with ca:
             group_a = st.multiselect(
-                "Group A",
-                names,
-                default=names[:min(3, len(names))],
+                "Group A", 
+                names, 
+                default=names[:min(3, len(names))], 
                 key="ga"
             )
         with cb:
@@ -774,7 +765,7 @@ else:
         # Date filtering
         all_logs_raw = {**logs_a, **logs_b}
         min_d, max_d = common_date_window(all_logs_raw)
-
+        
         if min_d is None:
             show_error("No dates found in player game logs.")
             st.stop()
@@ -783,22 +774,22 @@ else:
         f1, f2, f3 = st.columns([2, 2, 2])
         with f1:
             start_date = st.date_input(
-                "Start date",
-                value=min_d.date(),
-                min_value=min_d.date(),
+                "Start date", 
+                value=min_d.date(), 
+                min_value=min_d.date(), 
                 max_value=max_d.date()
             )
         with f2:
             end_date = st.date_input(
-                "End date",
-                value=max_d.date(),
-                min_value=min_d.date(),
+                "End date", 
+                value=max_d.date(), 
+                min_value=min_d.date(), 
                 max_value=max_d.date()
             )
         with f3:
             preset = st.selectbox(
-                "Quick preset",
-                ["Custom", "Last 7 games", "Last 14 games", "Last 30 games"],
+                "Quick preset", 
+                ["Custom", "Last 7 games", "Last 14 games", "Last 30 games"], 
                 index=0
             )
 
@@ -832,7 +823,7 @@ else:
         st.markdown("## 📊 Group Summaries (Per-Game Averages)")
         sA = group_summary(logs_a)
         sB = group_summary(logs_b)
-
+        
         ca, cb = st.columns(2)
         with ca:
             st.markdown("### Group A")
@@ -845,7 +836,7 @@ else:
         st.markdown("## 📈 Group Comparison Over Time")
 
         metric_options = [
-            "PTS", "REB", "AST", "STL", "BLK", "TOV",
+            "PTS", "REB", "AST", "STL", "BLK", "TOV", 
             "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M", "PLUS_MINUS", "MIN"
         ]
         metric_picks = st.multiselect(
@@ -854,7 +845,7 @@ else:
             default=["PTS", "AST", "REB", "FG3M"],
             key="cmp_metrics",
         )
-
+        
         if not metric_picks:
             st.info("💡 Select at least 1 metric to visualize.")
             st.stop()
@@ -866,7 +857,6 @@ else:
             key="cmp_view_mode",
         )
 
-
         def group_daily_avg_long(logs: dict, group_name: str, metric: str) -> pd.DataFrame:
             """Create long-format DataFrame for group daily averages."""
             per = group_daily_series(logs, metric)
@@ -874,12 +864,11 @@ else:
                 return pd.DataFrame(columns=["GAME_DATE", "Group", "Metric", "Value"])
             s = per.mean(axis=1).dropna().sort_index()
             return pd.DataFrame({
-                "GAME_DATE": s.index,
-                "Group": group_name,
-                "Metric": metric,
+                "GAME_DATE": s.index, 
+                "Group": group_name, 
+                "Metric": metric, 
                 "Value": s.values
             })
-
 
         # Build data
         parts = []
@@ -918,9 +907,9 @@ else:
 
             else:
                 metric_one = st.selectbox(
-                    "Select metric to view",
-                    metric_picks,
-                    index=0,
+                    "Select metric to view", 
+                    metric_picks, 
+                    index=0, 
                     key="cmp_one_metric"
                 )
                 df1 = long_df[long_df["Metric"] == metric_one].copy()
@@ -958,14 +947,12 @@ else:
             key="cmp_delta_metrics",
         )
 
-
         def mean_metric_from_logs(logs: dict, metric: str) -> float:
             """Calculate mean of a metric across all players in a group."""
             df = group_summary(logs)
             if df is None or df.empty or metric not in df.columns:
                 return np.nan
             return float(pd.to_numeric(df[metric], errors="coerce").mean())
-
 
         rows = []
         for m in delta_metrics:
@@ -1001,7 +988,7 @@ else:
             )
             st.altair_chart(bar, use_container_width=True)
 
-        # Synergy matrix
+        # Synergy matrix (optional)
         if st.checkbox("Show synergy matrix (correlation on overlapping dates)", value=False):
             st.markdown("## 🔗 Synergy Matrix")
             all_logs = {**logs_a, **logs_b}
@@ -1015,7 +1002,7 @@ else:
                 counts.append((n, len(d)))
 
             diag = pd.DataFrame(counts, columns=["Player", "Games in window"]).sort_values(
-                "Games in window",
+                "Games in window", 
                 ascending=False
             )
             st.dataframe(diag, use_container_width=True, hide_index=True)
@@ -1026,13 +1013,13 @@ else:
 
             metric_for_synergy = metric_picks[0] if metric_picks else "PTS"
             st.write(f"**Correlation metric:** {metric_for_synergy}")
-
+            
             corr = synergy_matrix(all_logs, metric_for_synergy)
             st.dataframe(corr, use_container_width=True)
 
-
+    # =========================
     # Teams Compare
-
+    # =========================
     with t_teams:
         st.write("Compare 2 teams using recent game statistics.")
 
@@ -1078,7 +1065,6 @@ else:
             show_error("Failed to load team game logs. Please try again later.", e)
             st.stop()
 
-
         def prep(df: pd.DataFrame, label: str) -> pd.DataFrame:
             """Prepare team data for comparison."""
             out = df.copy()
@@ -1087,7 +1073,6 @@ else:
                 out = out.sort_values("GAME_DATE").set_index("GAME_DATE")
             out.columns = [f"{label} {c}" for c in out.columns]
             return out
-
 
         gA = prep(ga, "A")
         gB = prep(gb, "B")
@@ -1110,7 +1095,7 @@ else:
             key="team_metric_pick",
         )
 
-        for m in picks[:6]:  
+        for m in picks[:6]:  # Limit to 6 charts
             a_col = f"A {m}"
             b_col = f"B {m}"
             cols = [c for c in [a_col, b_col] if c in merged.columns]
