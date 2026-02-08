@@ -629,6 +629,9 @@ else:
 
         if "pool" not in st.session_state:
             st.session_state.pool = {}  # name -> id
+        
+        if "search_results" not in st.session_state:
+            st.session_state.search_results = None
 
         add_mode = st.radio(
             "Add players by", 
@@ -645,33 +648,36 @@ else:
 
             if do_search and q.strip():
                 try:
-                    res = search_players(q.strip())
+                    st.session_state.search_results = search_players(q.strip())
                 except Exception as e:
                     show_error("Search failed.", e)
-                    st.stop()
+                    st.session_state.search_results = None
 
-                if res.empty:
-                    st.warning("No results found.")
+            # Display search results if available
+            if st.session_state.search_results is not None and not st.session_state.search_results.empty:
+                res = st.session_state.search_results
+                st.dataframe(res, use_container_width=True, hide_index=True)
+                
+                # Show available players to add
+                available_players = [p for p in res["full_name"].tolist() if p not in st.session_state.pool]
+                
+                if not available_players:
+                    st.info("✅ All players from this search are already in the pool!")
                 else:
-                    st.dataframe(res, use_container_width=True, hide_index=True)
-                    
-                    # Show available players to add
-                    available_players = [p for p in res["full_name"].tolist() if p not in st.session_state.pool]
-                    
-                    if not available_players:
-                        st.info("All players from this search are already in the pool!")
-                    else:
-                        st.markdown("**Select players to add:**")
-                        for idx, player_name in enumerate(available_players):
-                            col1, col2 = st.columns([3, 1])
-                            with col1:
-                                st.write(player_name)
-                            with col2:
-                                if st.button("➕ Add", key=f"add_player_{idx}_{player_name.replace(' ', '_')}"):
-                                    pid = int(res.loc[res["full_name"] == player_name, "id"].iloc[0])
-                                    st.session_state.pool[player_name] = pid
-                                    st.success(f"Added {player_name}!")
-                                    st.rerun()
+                    st.markdown("**Select players to add:**")
+                    for idx, player_name in enumerate(available_players):
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.write(f"🏀 {player_name}")
+                        with col2:
+                            if st.button("➕ Add", key=f"add_player_{idx}_{player_name.replace(' ', '_')}"):
+                                pid = int(res.loc[res["full_name"] == player_name, "id"].iloc[0])
+                                st.session_state.pool[player_name] = pid
+                                st.success(f"✅ Added {player_name} to pool!")
+                                time.sleep(0.5)  # Brief pause so user sees success message
+                                st.rerun()
+            elif do_search and st.session_state.search_results is not None and st.session_state.search_results.empty:
+                st.warning("No players found matching your search.")
 
         # Add players - Team Roster
         else:
