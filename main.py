@@ -31,6 +31,7 @@ from nba_client import (
     add_derived_player_columns,
     filter_log_by_date,
     common_date_window,
+    calculate_per,
 )
 
 # Configuration Constants (embedded directly)
@@ -716,14 +717,49 @@ else:
             st.info("💡 The pool is empty. Add players using the options above.")
             st.stop()
 
-        c1, c2 = st.columns([4, 1])
-        with c1:
-            st.markdown("### 👥 Current Pool")
-            st.write(sorted(list(st.session_state.pool.keys())))
-        with c2:
-            if st.button("🗑️ Clear Pool"):
-                st.session_state.pool = {}
-                st.rerun()
+        st.markdown("### 👥 Current Pool")
+        
+        # Fetch PER ratings for pool players
+        pool_data = []
+        for name, pid in st.session_state.pool.items():
+            try:
+                log = load_player_log(pid, season)
+                per = calculate_per(log)
+                avg_pts = summarize_player(log).get('PTS', 0)
+                pool_data.append({
+                    'name': name,
+                    'pid': pid,
+                    'per': per,
+                    'pts': avg_pts
+                })
+            except:
+                pool_data.append({
+                    'name': name,
+                    'pid': pid,
+                    'per': 0,
+                    'pts': 0
+                })
+        
+        # Sort by PER
+        pool_data.sort(key=lambda x: x['per'], reverse=True)
+        
+        # Display in grid with images
+        cols_per_row = 4
+        for i in range(0, len(pool_data), cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j, col in enumerate(cols):
+                if i + j < len(pool_data):
+                    player = pool_data[i + j]
+                    with col:
+                        st.image(player_headshot_url(player['pid']), use_container_width=True)
+                        st.markdown(f"**{player['name']}**")
+                        st.caption(f"⭐ PER: {player['per']:.1f}")
+                        st.caption(f"📊 {player['pts']:.1f} PPG")
+        
+        # Clear pool button
+        if st.button("🗑️ Clear Entire Pool"):
+            st.session_state.pool = {}
+            st.rerun()
 
         # Select groups
         names = sorted(list(st.session_state.pool.keys()))
@@ -846,8 +882,22 @@ else:
 
         # Group summaries
         st.markdown("## 📊 Group Summaries (Per-Game Averages)")
-        sA = group_summary(logs_a)
-        sB = group_summary(logs_b)
+        
+        # Calculate PER for each player
+        def add_per_to_summary(logs_dict):
+            summary = group_summary(logs_dict)
+            per_list = []
+            for name in summary['Player']:
+                if name == 'COMBINED':
+                    per_list.append(None)  # Calculate after
+                else:
+                    per = calculate_per(logs_dict.get(name, pd.DataFrame()))
+                    per_list.append(per)
+            summary.insert(2, 'PER', per_list)
+            return summary
+        
+        sA = add_per_to_summary(logs_a)
+        sB = add_per_to_summary(logs_b)
         
         # Add combined stats row for each group (if more than 1 player)
         def add_combined_row(summary_df):
@@ -856,7 +906,7 @@ else:
             
             # Separate percentage columns from counting stats
             percentage_cols = ["FG_PCT", "FG3_PCT", "FT_PCT"]
-            counting_cols = [c for c in summary_df.columns if c not in ["Player", "Games"] + percentage_cols]
+            counting_cols = [c for c in summary_df.columns if c not in ["Player", "Games", "PER"] + percentage_cols]
             
             combined_row = {"Player": "COMBINED", "Games": int(summary_df["Games"].sum())}
             
@@ -875,6 +925,20 @@ else:
                         combined_row[col] = weighted_sum / total_games
                     else:
                         combined_row[col] = 0
+            
+            # For PER: weighted average by games played
+            if "PER" in summary_df.columns:
+                total_games = summary_df["Games"].sum()
+                if total_games > 0:
+                    # Only use non-null PER values
+                    valid_per = summary_df.dropna(subset=['PER'])
+                    if not valid_per.empty:
+                        weighted_per = (valid_per["PER"] * valid_per["Games"]).sum()
+                        combined_row["PER"] = weighted_per / total_games
+                    else:
+                        combined_row["PER"] = 0
+                else:
+                    combined_row["PER"] = 0
             
             # Add combined row at the top
             combined_df = pd.DataFrame([combined_row])
@@ -895,13 +959,13 @@ else:
         st.markdown("## 📈 Group Comparison Over Time")
 
         metric_options = [
-            "PTS", "REB", "AST", "STL", "BLK", "TOV", 
+            "PER", "PTS", "REB", "AST", "STL", "BLK", "TOV", 
             "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M", "PLUS_MINUS", "MIN"
         ]
         metric_picks = st.multiselect(
             "Select metrics to visualize",
             metric_options,
-            default=["PTS", "AST", "REB", "FG3M"],
+            default=["PER", "PTS", "AST", "REB"],
             key="cmp_metrics",
         )
         
@@ -1001,8 +1065,8 @@ else:
 
         delta_metrics = st.multiselect(
             "Metrics for delta comparison",
-            ["PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M", "PLUS_MINUS", "MIN"],
-            default=["PTS", "AST", "REB", "FG3M"],
+            ["PER", "PTS", "REB", "AST", "STL", "BLK", "TOV", "FG_PCT", "FG3_PCT", "FT_PCT", "FG3M", "PLUS_MINUS", "MIN"],
+            default=["PER", "PTS", "AST", "REB"],
             key="cmp_delta_metrics",
         )
 
