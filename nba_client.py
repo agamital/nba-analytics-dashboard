@@ -708,6 +708,58 @@ def group_daily_series(player_logs: Dict[str, pd.DataFrame], metric: str = "PTS"
     return pivot
 
 
+def calculate_per_per_game(df_log: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate PER for each individual game.
+    
+    Args:
+        df_log: Player game log DataFrame
+        
+    Returns:
+        DataFrame with PER column added for each game
+    """
+    if df_log.empty:
+        return df_log
+    
+    df = add_derived_player_columns(df_log).copy()
+    
+    per_list = []
+    for _, game in df.iterrows():
+        # Extract stats for this game
+        pts = game.get('PTS', 0)
+        fgm = game.get('FGM', 0)
+        fga = game.get('FGA', 0)
+        ftm = game.get('FTM', 0)
+        fta = game.get('FTA', 0)
+        fg3m = game.get('FG3M', 0)
+        reb = game.get('REB', 0)
+        ast = game.get('AST', 0)
+        stl = game.get('STL', 0)
+        blk = game.get('BLK', 0)
+        tov = game.get('TOV', 0)
+        pf = game.get('PF', 2) if 'PF' in game else 2
+        
+        # Calculate PER for this game
+        per = (
+            pts * 1.0 +
+            reb * 0.4 +
+            ast * 0.7 +
+            stl * 1.0 +
+            blk * 1.0 +
+            fg3m * 0.5 +
+            fgm * 0.5 -
+            (fga - fgm) * 0.5 -
+            (fta - ftm) * 0.5 -
+            tov * 1.0 -
+            pf * 0.5
+        )
+        per = max(0, per * 0.67)
+        per_list.append(round(per, 1))
+    
+    df['PER'] = per_list
+    return df
+
+
 def calculate_per(df_log: pd.DataFrame) -> float:
     """
     Calculate Player Efficiency Rating (PER) - John Hollinger's formula.
