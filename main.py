@@ -32,6 +32,7 @@ from nba_client import (
     filter_log_by_date,
     common_date_window,
     calculate_per,
+    calculate_per_per_game,
 )
 
 # Configuration Constants (embedded directly)
@@ -808,12 +809,18 @@ else:
             with st.spinner("Fetching player game logs..."):
                 logs_a = {}
                 for n in group_a:
-                    logs_a[n] = add_derived_player_columns(load_player_log(st.session_state.pool[n], season))
+                    log = load_player_log(st.session_state.pool[n], season)
+                    log = add_derived_player_columns(log)
+                    log = calculate_per_per_game(log)  # Add PER per game
+                    logs_a[n] = log
                     throttle()
 
                 logs_b = {}
                 for n in group_b:
-                    logs_b[n] = add_derived_player_columns(load_player_log(st.session_state.pool[n], season))
+                    log = load_player_log(st.session_state.pool[n], season)
+                    log = add_derived_player_columns(log)
+                    log = calculate_per_per_game(log)  # Add PER per game
+                    logs_b[n] = log
                     throttle()
         except Exception as e:
             show_error(
@@ -1110,6 +1117,219 @@ else:
                 .properties(height=300)
             )
             st.altair_chart(bar, use_container_width=True)
+
+        # NEW CHART 1: Win/Loss Performance Comparison
+        st.markdown("## 🏆 Win/Loss Performance Analysis")
+        st.caption("How do the groups perform in wins vs losses?")
+        
+        def get_win_loss_stats(logs_dict):
+            win_stats = []
+            loss_stats = []
+            for name, log in logs_dict.items():
+                if 'WL' not in log.columns:
+                    continue
+                wins = log[log['WL'] == 'W']
+                losses = log[log['WL'] == 'L']
+                if not wins.empty:
+                    win_stats.append(wins[['PTS', 'REB', 'AST', 'PER']].mean())
+                if not losses.empty:
+                    loss_stats.append(losses[['PTS', 'REB', 'AST', 'PER']].mean())
+            
+            if win_stats:
+                win_avg = pd.DataFrame(win_stats).mean()
+            else:
+                win_avg = pd.Series({'PTS': 0, 'REB': 0, 'AST': 0, 'PER': 0})
+            
+            if loss_stats:
+                loss_avg = pd.DataFrame(loss_stats).mean()
+            else:
+                loss_avg = pd.Series({'PTS': 0, 'REB': 0, 'AST': 0, 'PER': 0})
+            
+            return win_avg, loss_avg
+        
+        win_a, loss_a = get_win_loss_stats(logs_a)
+        win_b, loss_b = get_win_loss_stats(logs_b)
+        
+        wl_data = pd.DataFrame([
+            {'Group': 'Group A', 'Result': 'Wins', 'PTS': win_a['PTS'], 'REB': win_a['REB'], 'AST': win_a['AST'], 'PER': win_a['PER']},
+            {'Group': 'Group A', 'Result': 'Losses', 'PTS': loss_a['PTS'], 'REB': loss_a['REB'], 'AST': loss_a['AST'], 'PER': loss_a['PER']},
+            {'Group': 'Group B', 'Result': 'Wins', 'PTS': win_b['PTS'], 'REB': win_b['REB'], 'AST': win_b['AST'], 'PER': win_b['PER']},
+            {'Group': 'Group B', 'Result': 'Losses', 'PTS': loss_b['PTS'], 'REB': loss_b['REB'], 'AST': loss_b['AST'], 'PER': loss_b['PER']},
+        ])
+        
+        wl_metric = st.selectbox("Select metric for Win/Loss analysis", ['PER', 'PTS', 'REB', 'AST'], key='wl_metric')
+        
+        wl_chart = (
+            alt.Chart(wl_data)
+            .mark_bar()
+            .encode(
+                x=alt.X('Group:N', title=''),
+                y=alt.Y(f'{wl_metric}:Q', title=wl_metric),
+                color=alt.Color('Result:N', scale=alt.Scale(domain=['Wins', 'Losses'], range=['#2ecc71', '#e74c3c'])),
+                column=alt.Column('Result:N', title=''),
+                tooltip=['Group:N', 'Result:N', alt.Tooltip(f'{wl_metric}:Q', format='.2f')]
+            )
+            .properties(width=200, height=300)
+        )
+        st.altair_chart(wl_chart, use_container_width=True)
+        
+        # Show insights
+        per_diff_wins = win_a['PER'] - win_b['PER']
+        per_diff_losses = loss_a['PER'] - loss_b['PER']
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Group A PER in Wins", f"{win_a['PER']:.1f}", f"{per_diff_wins:+.1f} vs Group B")
+        with col2:
+            st.metric("Group A PER in Losses", f"{loss_a['PER']:.1f}", f"{per_diff_losses:+.1f} vs Group B")
+
+        # NEW CHART 2: Consistency Score
+        st.markdown("## 📊 Consistency Analysis")
+        st.caption("Which group performs more consistently? (Lower standard deviation = more consistent)")
+        
+        def get_consistency_metrics(logs_dict):
+            all_pers = []
+            all_pts = []
+            for name, log in logs_dict.items():
+                if 'PER' in log.columns:
+                    all_pers.extend(log['PER'].dropna().tolist())
+                if 'PTS' in log.columns:
+                    all_pts.extend(log['PTS'].dropna().tolist())
+            
+            return {
+                'PER_std': np.std(all_pers) if all_pers else 0,
+                'PER_mean': np.mean(all_pers) if all_pers else 0,
+                'PTS_std': np.std(all_pts) if all_pts else 0,
+                'PTS_mean': np.mean(all_pts) if all_pts else 0,
+            }
+        
+        cons_a = get_consistency_metrics(logs_a)
+        cons_b = get_consistency_metrics(logs_b)
+        
+        cons_data = pd.DataFrame([
+            {'Group': 'Group A', 'Metric': 'PER Consistency', 'Value': cons_a['PER_std'], 'Type': 'StdDev'},
+            {'Group': 'Group B', 'Metric': 'PER Consistency', 'Value': cons_b['PER_std'], 'Type': 'StdDev'},
+            {'Group': 'Group A', 'Metric': 'PTS Consistency', 'Value': cons_a['PTS_std'], 'Type': 'StdDev'},
+            {'Group': 'Group B', 'Metric': 'PTS Consistency', 'Value': cons_b['PTS_std'], 'Type': 'StdDev'},
+        ])
+        
+        cons_chart = (
+            alt.Chart(cons_data)
+            .mark_bar()
+            .encode(
+                x=alt.X('Group:N'),
+                y=alt.Y('Value:Q', title='Standard Deviation (Lower = More Consistent)'),
+                color=alt.Color('Group:N'),
+                column=alt.Column('Metric:N'),
+                tooltip=['Group:N', alt.Tooltip('Value:Q', format='.2f', title='Std Dev')]
+            )
+            .properties(width=200, height=300)
+        )
+        st.altair_chart(cons_chart, use_container_width=True)
+        
+        # Consistency winner
+        if cons_a['PER_std'] < cons_b['PER_std']:
+            st.success(f"🎯 **Group A is more consistent** (PER std: {cons_a['PER_std']:.2f} vs {cons_b['PER_std']:.2f})")
+        else:
+            st.success(f"🎯 **Group B is more consistent** (PER std: {cons_b['PER_std']:.2f} vs {cons_a['PER_std']:.2f})")
+
+        # NEW CHART 3: Head-to-Head on Common Dates
+        st.markdown("## ⚔️ Head-to-Head Performance (Common Game Dates)")
+        st.caption("When both groups played on the same dates, who performed better?")
+        
+        # Find common dates
+        dates_a = set()
+        dates_b = set()
+        for log in logs_a.values():
+            if 'GAME_DATE' in log.columns:
+                dates_a.update(pd.to_datetime(log['GAME_DATE']).dt.date.tolist())
+        for log in logs_b.values():
+            if 'GAME_DATE' in log.columns:
+                dates_b.update(pd.to_datetime(log['GAME_DATE']).dt.date.tolist())
+        
+        common_dates = sorted(list(dates_a.intersection(dates_b)))
+        
+        if len(common_dates) >= 5:
+            st.info(f"Found {len(common_dates)} common game dates")
+            
+            h2h_data = []
+            for date in common_dates:
+                date_ts = pd.Timestamp(date)
+                
+                # Group A stats for this date
+                a_stats = []
+                for log in logs_a.values():
+                    if 'GAME_DATE' not in log.columns:
+                        continue
+                    log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
+                    day_log = log[log['GAME_DATE'].dt.date == date]
+                    if not day_log.empty and 'PER' in day_log.columns:
+                        a_stats.append(day_log['PER'].iloc[0])
+                
+                # Group B stats for this date
+                b_stats = []
+                for log in logs_b.values():
+                    if 'GAME_DATE' not in log.columns:
+                        continue
+                    log['GAME_DATE'] = pd.to_datetime(log['GAME_DATE'])
+                    day_log = log[log['GAME_DATE'].dt.date == date]
+                    if not day_log.empty and 'PER' in day_log.columns:
+                        b_stats.append(day_log['PER'].iloc[0])
+                
+                if a_stats and b_stats:
+                    h2h_data.append({
+                        'Date': date_ts,
+                        'Group A': np.mean(a_stats),
+                        'Group B': np.mean(b_stats),
+                        'Winner': 'Group A' if np.mean(a_stats) > np.mean(b_stats) else 'Group B'
+                    })
+            
+            if h2h_data:
+                h2h_df = pd.DataFrame(h2h_data)
+                
+                # Melt for Altair
+                h2h_long = pd.melt(
+                    h2h_df, 
+                    id_vars=['Date'], 
+                    value_vars=['Group A', 'Group B'],
+                    var_name='Group',
+                    value_name='PER'
+                )
+                
+                h2h_chart = (
+                    alt.Chart(h2h_long)
+                    .mark_line(point=True)
+                    .encode(
+                        x=alt.X('Date:T', title='Game Date'),
+                        y=alt.Y('PER:Q', title='Average PER'),
+                        color=alt.Color('Group:N'),
+                        tooltip=[
+                            'Group:N',
+                            alt.Tooltip('Date:T', title='Date'),
+                            alt.Tooltip('PER:Q', format='.2f', title='PER')
+                        ]
+                    )
+                    .properties(height=300)
+                    .interactive()
+                )
+                st.altair_chart(h2h_chart, use_container_width=True)
+                
+                # Head-to-head record
+                a_wins = sum(1 for row in h2h_data if row['Winner'] == 'Group A')
+                b_wins = sum(1 for row in h2h_data if row['Winner'] == 'Group B')
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Group A Wins", a_wins)
+                with col2:
+                    st.metric("Group B Wins", b_wins)
+                with col3:
+                    win_pct = (a_wins / len(h2h_data) * 100) if h2h_data else 0
+                    st.metric("Group A Win %", f"{win_pct:.1f}%")
+            else:
+                st.info("Not enough overlapping data for head-to-head analysis")
+        else:
+            st.info(f"Only {len(common_dates)} common dates found. Need at least 5 for meaningful head-to-head analysis.")
 
         # Synergy matrix (optional)
         if st.checkbox("Show synergy matrix (correlation on overlapping dates)", value=False):
