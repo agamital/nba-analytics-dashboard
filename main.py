@@ -661,18 +661,17 @@ else:
                     if not available_players:
                         st.info("All players from this search are already in the pool!")
                     else:
-                        picks_to_add = st.multiselect(
-                            "Select players to add to pool",
-                            available_players,
-                            key="cmp_pick_global"
-                        )
-                        
-                        if st.button("➕ Add Selected to Pool", key="add_btn"):
-                            for pick in picks_to_add:
-                                pid = int(res.loc[res["full_name"] == pick, "id"].iloc[0])
-                                st.session_state.pool[pick] = pid
-                            st.success(f"Added {len(picks_to_add)} player(s) to pool!")
-                            st.rerun()
+                        st.markdown("**Select players to add:**")
+                        for idx, player_name in enumerate(available_players):
+                            col1, col2 = st.columns([3, 1])
+                            with col1:
+                                st.write(player_name)
+                            with col2:
+                                if st.button("➕ Add", key=f"add_player_{idx}_{player_name.replace(' ', '_')}"):
+                                    pid = int(res.loc[res["full_name"] == player_name, "id"].iloc[0])
+                                    st.session_state.pool[player_name] = pid
+                                    st.success(f"Added {player_name}!")
+                                    st.rerun()
 
         # Add players - Team Roster
         else:
