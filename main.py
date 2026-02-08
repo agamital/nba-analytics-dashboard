@@ -109,21 +109,41 @@ def show_error(message: str, exception: Exception = None):
 
 
 def metric_row(summary: pd.Series):
-    """Display player statistics in a grid layout."""
-    # Basic stats
+    """Display player statistics in a grid layout with color-coded values."""
+    # Basic stats with color coding
     a1, a2, a3, a4, a5, a6 = st.columns(6)
+    
+    pts = summary.get('PTS', 0)
+    reb = summary.get('REB', 0)
+    ast = summary.get('AST', 0)
+    
+    # Color code based on performance levels
+    pts_color = "off" if pts < 15 else "normal" if pts < 25 else "inverse"
+    reb_color = "off" if reb < 5 else "normal" if reb < 10 else "inverse"
+    ast_color = "off" if ast < 3 else "normal" if ast < 7 else "inverse"
+    
     a1.metric("Games", int(summary.get("Games", 0)))
-    a2.metric("PTS", f"{summary.get('PTS', 0):.1f}")
-    a3.metric("REB", f"{summary.get('REB', 0):.1f}")
-    a4.metric("AST", f"{summary.get('AST', 0):.1f}")
+    a2.metric("PTS", f"{pts:.1f}", delta=None, delta_color=pts_color)
+    a3.metric("REB", f"{reb:.1f}", delta=None, delta_color=reb_color)
+    a4.metric("AST", f"{ast:.1f}", delta=None, delta_color=ast_color)
     a5.metric("STL", f"{summary.get('STL', 0):.1f}")
     a6.metric("BLK", f"{summary.get('BLK', 0):.1f}")
 
-    # Shooting stats
+    # Shooting stats with efficiency indicators
     b1, b2, b3, b4, b5, b6 = st.columns(6)
-    b1.metric("FG%", f"{summary.get('FG_PCT', 0):.3f}" if "FG_PCT" in summary else "—")
-    b2.metric("3P%", f"{summary.get('FG3_PCT', 0):.3f}" if "FG3_PCT" in summary else "—")
-    b3.metric("FT%", f"{summary.get('FT_PCT', 0):.3f}" if "FT_PCT" in summary else "—")
+    
+    fg_pct = summary.get('FG_PCT', 0)
+    fg3_pct = summary.get('FG3_PCT', 0)
+    ft_pct = summary.get('FT_PCT', 0)
+    
+    # Add visual indicators for shooting efficiency
+    fg_indicator = "🔥" if fg_pct > 0.50 else "✅" if fg_pct > 0.45 else "⚠️"
+    fg3_indicator = "🎯" if fg3_pct > 0.40 else "✅" if fg3_pct > 0.35 else "⚠️"
+    ft_indicator = "💯" if ft_pct > 0.85 else "✅" if ft_pct > 0.75 else "⚠️"
+    
+    b1.metric(f"FG% {fg_indicator}", f"{fg_pct:.3f}" if "FG_PCT" in summary else "—")
+    b2.metric(f"3P% {fg3_indicator}", f"{fg3_pct:.3f}" if "FG3_PCT" in summary else "—")
+    b3.metric(f"FT% {ft_indicator}", f"{ft_pct:.3f}" if "FT_PCT" in summary else "—")
     b4.metric("3PM", f"{summary.get('FG3M', 0):.1f}" if "FG3M" in summary else "—")
     b5.metric("TOV", f"{summary.get('TOV', 0):.1f}")
     b6.metric("+/-", f"{summary.get('PLUS_MINUS', 0):.1f}" if "PLUS_MINUS" in summary else "—")
@@ -621,7 +641,7 @@ elif page == "Player Explorer":
 else:
     st.subheader("🔄 Compare & Synergy")
 
-    t_players, t_teams = st.tabs(["👥 Players Compare", "🏀 Teams Compare"])
+    t_players, t_1v1, t_teams = st.tabs(["👥 Group Compare", "⚔️ 1v1 Battle", "🏀 Teams Compare"])
 
     # =========================
     # Players Compare
@@ -958,9 +978,27 @@ else:
         with ca:
             st.markdown("### Group A")
             st.dataframe(sA_with_combined, use_container_width=True, hide_index=True)
+            # Export button
+            csv_a = sA_with_combined.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download CSV",
+                data=csv_a,
+                file_name=f"group_a_stats_{season}.csv",
+                mime="text/csv",
+                key="download_a"
+            )
         with cb:
             st.markdown("### Group B")
             st.dataframe(sB_with_combined, use_container_width=True, hide_index=True)
+            # Export button
+            csv_b = sB_with_combined.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download CSV",
+                data=csv_b,
+                file_name=f"group_b_stats_{season}.csv",
+                mime="text/csv",
+                key="download_b"
+            )
 
         # Comparison charts
         st.markdown("## 📈 Group Comparison Over Time")
@@ -1331,6 +1369,199 @@ else:
         else:
             st.info(f"Only {len(common_dates)} common dates found. Need at least 5 for meaningful head-to-head analysis.")
 
+        # NEW FEATURE: AI Insights & Recommendations
+        st.markdown("## 🤖 AI-Powered Insights")
+        
+        with st.expander("📊 View Automated Analysis & Recommendations", expanded=True):
+            # Calculate key metrics
+            per_a = sA_with_combined[sA_with_combined['Player'] == 'COMBINED']['PER'].iloc[0] if 'COMBINED' in sA_with_combined['Player'].values and 'PER' in sA_with_combined.columns else 15.0
+            per_b = sB_with_combined[sB_with_combined['Player'] == 'COMBINED']['PER'].iloc[0] if 'COMBINED' in sB_with_combined['Player'].values and 'PER' in sB_with_combined.columns else 15.0
+            pts_a = sA_with_combined[sA_with_combined['Player'] == 'COMBINED']['PTS'].iloc[0] if 'COMBINED' in sA_with_combined['Player'].values and 'PTS' in sA_with_combined.columns else 0
+            pts_b = sB_with_combined[sB_with_combined['Player'] == 'COMBINED']['PTS'].iloc[0] if 'COMBINED' in sB_with_combined['Player'].values and 'PTS' in sB_with_combined.columns else 0
+            
+            st.markdown("### 🎯 Key Findings")
+            
+            # Winner determination
+            per_diff = abs(per_a - per_b)
+            pts_diff = abs(pts_a - pts_b)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if per_a > per_b:
+                    st.markdown(f"**🥇 Efficiency Winner: Group A**")
+                    st.write(f"PER Advantage: +{per_diff:.1f}")
+                    if per_diff > 3:
+                        st.success("💪 Significant efficiency advantage!")
+                    elif per_diff > 1.5:
+                        st.info("✅ Moderate efficiency advantage")
+                    else:
+                        st.warning("⚖️ Very close matchup")
+                else:
+                    st.markdown(f"**🥇 Efficiency Winner: Group B**")
+                    st.write(f"PER Advantage: +{per_diff:.1f}")
+                    if per_diff > 3:
+                        st.success("💪 Significant efficiency advantage!")
+                    elif per_diff > 1.5:
+                        st.info("✅ Moderate efficiency advantage")
+                    else:
+                        st.warning("⚖️ Very close matchup")
+            
+            with col2:
+                if pts_a > pts_b:
+                    st.markdown(f"**📊 Scoring Winner: Group A**")
+                    st.write(f"PPG Advantage: +{pts_diff:.1f}")
+                    if pts_diff > 10:
+                        st.success("🔥 Dominant scoring advantage!")
+                    elif pts_diff > 5:
+                        st.info("⬆️ Clear scoring edge")
+                    else:
+                        st.warning("🤝 Tight scoring battle")
+                else:
+                    st.markdown(f"**📊 Scoring Winner: Group B**")
+                    st.write(f"PPG Advantage: +{pts_diff:.1f}")
+                    if pts_diff > 10:
+                        st.success("🔥 Dominant scoring advantage!")
+                    elif pts_diff > 5:
+                        st.info("⬆️ Clear scoring edge")
+                    else:
+                        st.warning("🤝 Tight scoring battle")
+            
+            # Recommendation
+            st.markdown("### 💡 Final Verdict")
+            
+            if per_a > per_b and pts_a > pts_b:
+                st.success(f"✨ **Clear Winner: Group A** - Superior in both efficiency (PER {per_a:.1f}) and scoring ({pts_a:.1f} PPG). Recommended for competitive play.")
+            elif per_b > per_a and pts_b > pts_a:
+                st.success(f"✨ **Clear Winner: Group B** - Superior in both efficiency (PER {per_b:.1f}) and scoring ({pts_b:.1f} PPG). Recommended for competitive play.")
+            elif per_a > per_b:
+                st.info(f"⚖️ **Strategic Choice** - Group A more efficient (PER +{per_diff:.1f}), Group B scores more (+{pts_diff:.1f} PPG). Choose A for efficiency, B for volume.")
+            else:
+                st.info(f"⚖️ **Strategic Choice** - Group B more efficient (PER +{per_diff:.1f}), Group A scores more (+{pts_diff:.1f} PPG). Choose B for efficiency, A for volume.")
+
+        # NEW FEATURE: Performance Prediction
+        st.markdown("## 🔮 Next Game Predictor")
+        
+        with st.expander("⚡ AI Performance Forecast", expanded=False):
+            st.caption("Weighted prediction model based on last 5 games (recent games weighted higher)")
+            
+            def predict_next_game(logs_dict):
+                predictions = []
+                for name, log in logs_dict.items():
+                    if log.empty or 'PTS' not in log.columns:
+                        continue
+                    
+                    # Use last 5 games for prediction
+                    recent = log.tail(5)
+                    
+                    if len(recent) < 2:
+                        continue
+                    
+                    # Weighted average (more recent = more weight)
+                    weights = [1.0, 1.2, 1.4, 1.6, 2.0]  # Last game has 2x weight
+                    actual_weights = weights[-len(recent):]
+                    
+                    pred_pts = np.average(recent['PTS'].fillna(0), weights=actual_weights)
+                    pred_reb = np.average(recent['REB'].fillna(0), weights=actual_weights) if 'REB' in recent.columns else 0
+                    pred_ast = np.average(recent['AST'].fillna(0), weights=actual_weights) if 'AST' in recent.columns else 0
+                    pred_per = np.average(recent['PER'].fillna(15), weights=actual_weights) if 'PER' in recent.columns else 15
+                    
+                    # Calculate trend
+                    if len(recent) >= 3:
+                        last_2_avg = recent['PTS'].tail(2).mean()
+                        first_2_avg = recent['PTS'].head(2).mean()
+                        if last_2_avg > first_2_avg * 1.1:
+                            trend = "📈 Hot"
+                        elif last_2_avg < first_2_avg * 0.9:
+                            trend = "📉 Cold"
+                        else:
+                            trend = "➡️ Steady"
+                    else:
+                        trend = "➡️ Steady"
+                    
+                    predictions.append({
+                        'Player': name,
+                        'Pred PTS': round(pred_pts, 1),
+                        'Pred REB': round(pred_reb, 1),
+                        'Pred AST': round(pred_ast, 1),
+                        'Pred PER': round(pred_per, 1),
+                        'Form': trend
+                    })
+                
+                return pd.DataFrame(predictions)
+            
+            pred_a = predict_next_game(logs_a)
+            pred_b = predict_next_game(logs_b)
+            
+            if not pred_a.empty and not pred_b.empty:
+                colpa, colpb = st.columns(2)
+                
+                with colpa:
+                    st.markdown("### 🔮 Group A Forecast")
+                    st.dataframe(pred_a, use_container_width=True, hide_index=True)
+                    total_pred_a = pred_a['Pred PTS'].sum()
+                    avg_per_a = pred_a['Pred PER'].mean()
+                    st.metric("Projected Total Points", f"{total_pred_a:.1f} PPG")
+                    st.metric("Projected Avg PER", f"{avg_per_a:.1f}")
+                
+                with colpb:
+                    st.markdown("### 🔮 Group B Forecast")
+                    st.dataframe(pred_b, use_container_width=True, hide_index=True)
+                    total_pred_b = pred_b['Pred PTS'].sum()
+                    avg_per_b = pred_b['Pred PER'].mean()
+                    st.metric("Projected Total Points", f"{total_pred_b:.1f} PPG")
+                    st.metric("Projected Avg PER", f"{avg_per_b:.1f}")
+                
+                # Matchup prediction
+                st.markdown("### 🏆 Matchup Forecast")
+                if total_pred_a > total_pred_b:
+                    diff = total_pred_a - total_pred_b
+                    confidence = min(((diff / total_pred_b) * 100), 95)
+                    st.success(f"🥇 **Group A favored** - Projected {total_pred_a:.1f} vs {total_pred_b:.1f} points (+{diff:.1f} PPG edge)")
+                    
+                    # Confidence meter
+                    if confidence > 15:
+                        st.info(f"**Confidence:** High ({confidence:.0f}%)")
+                    elif confidence > 7:
+                        st.info(f"**Confidence:** Medium ({confidence:.0f}%)")
+                    else:
+                        st.warning(f"**Confidence:** Low ({confidence:.0f}%) - Very close matchup!")
+                else:
+                    diff = total_pred_b - total_pred_a
+                    confidence = min(((diff / total_pred_a) * 100), 95)
+                    st.success(f"🥇 **Group B favored** - Projected {total_pred_b:.1f} vs {total_pred_a:.1f} points (+{diff:.1f} PPG edge)")
+                    
+                    if confidence > 15:
+                        st.info(f"**Confidence:** High ({confidence:.0f}%)")
+                    elif confidence > 7:
+                        st.info(f"**Confidence:** Medium ({confidence:.0f}%)")
+                    else:
+                        st.warning(f"**Confidence:** Low ({confidence:.0f}%) - Very close matchup!")
+                
+                # Show hot/cold players
+                hot_players_a = pred_a[pred_a['Form'] == '📈 Hot']['Player'].tolist()
+                hot_players_b = pred_b[pred_b['Form'] == '📈 Hot']['Player'].tolist()
+                cold_players_a = pred_a[pred_a['Form'] == '📉 Cold']['Player'].tolist()
+                cold_players_b = pred_b[pred_b['Form'] == '📉 Cold']['Player'].tolist()
+                
+                if hot_players_a or hot_players_b or cold_players_a or cold_players_b:
+                    st.markdown("### 🌡️ Current Form")
+                    col_hot, col_cold = st.columns(2)
+                    with col_hot:
+                        if hot_players_a or hot_players_b:
+                            st.markdown("**🔥 On Fire:**")
+                            if hot_players_a:
+                                st.write(f"Group A: {', '.join(hot_players_a)}")
+                            if hot_players_b:
+                                st.write(f"Group B: {', '.join(hot_players_b)}")
+                    with col_cold:
+                        if cold_players_a or cold_players_b:
+                            st.markdown("**❄️ Struggling:**")
+                            if cold_players_a:
+                                st.write(f"Group A: {', '.join(cold_players_a)}")
+                            if cold_players_b:
+                                st.write(f"Group B: {', '.join(cold_players_b)}")
+
         # Synergy matrix (optional)
         if st.checkbox("Show synergy matrix (correlation on overlapping dates)", value=False):
             st.markdown("## 🔗 Synergy Matrix")
@@ -1359,6 +1590,200 @@ else:
             
             corr = synergy_matrix(all_logs, metric_for_synergy)
             st.dataframe(corr, use_container_width=True)
+
+    # =========================
+    # 1v1 BATTLE
+    # =========================
+    with t_1v1:
+        st.markdown("### ⚔️ Player vs Player Showdown")
+        st.caption("Direct head-to-head comparison between any two NBA players")
+        
+        # Player selection
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 👤 Player 1")
+            search_1 = st.text_input("Search Player 1", placeholder="e.g., LeBron", key="1v1_p1")
+            if search_1:
+                try:
+                    results_1 = search_players(search_1)
+                    if not results_1.empty:
+                        player_1_name = st.selectbox("Select", results_1["full_name"].tolist(), key="1v1_p1_select")
+                        player_1_id = int(results_1.loc[results_1["full_name"] == player_1_name, "id"].iloc[0])
+                    else:
+                        st.warning("No results")
+                        player_1_id = None
+                except:
+                    player_1_id = None
+            else:
+                player_1_id = None
+        
+        with col2:
+            st.markdown("#### 👤 Player 2")
+            search_2 = st.text_input("Search Player 2", placeholder="e.g., Durant", key="1v1_p2")
+            if search_2:
+                try:
+                    results_2 = search_players(search_2)
+                    if not results_2.empty:
+                        player_2_name = st.selectbox("Select", results_2["full_name"].tolist(), key="1v1_p2_select")
+                        player_2_id = int(results_2.loc[results_2["full_name"] == player_2_name, "id"].iloc[0])
+                    else:
+                        st.warning("No results")
+                        player_2_id = None
+                except:
+                    player_2_id = None
+            else:
+                player_2_id = None
+        
+        if player_1_id and player_2_id:
+            # Fetch logs
+            try:
+                log_1 = calculate_per_per_game(add_derived_player_columns(load_player_log(player_1_id, season)))
+                log_2 = calculate_per_per_game(add_derived_player_columns(load_player_log(player_2_id, season)))
+            except Exception as e:
+                show_error("Failed to load player data", e)
+                st.stop()
+            
+            # Show headshots
+            h1, h2 = st.columns(2)
+            with h1:
+                st.image(player_headshot_url(player_1_id), width=150)
+                st.markdown(f"### {player_1_name}")
+            with h2:
+                st.image(player_headshot_url(player_2_id), width=150)
+                st.markdown(f"### {player_2_name}")
+            
+            st.divider()
+            
+            # Season stats comparison
+            st.markdown("### 📊 Season Averages Comparison")
+            
+            stats_1 = summarize_player(log_1)
+            stats_2 = summarize_player(log_2)
+            per_1 = calculate_per(log_1)
+            per_2 = calculate_per(log_2)
+            
+            # Create comparison dataframe
+            comparison = pd.DataFrame({
+                'Stat': ['PER', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'FG%', '3P%', 'FT%'],
+                player_1_name: [
+                    per_1,
+                    stats_1.get('PTS', 0),
+                    stats_1.get('REB', 0),
+                    stats_1.get('AST', 0),
+                    stats_1.get('STL', 0),
+                    stats_1.get('BLK', 0),
+                    stats_1.get('FG_PCT', 0),
+                    stats_1.get('FG3_PCT', 0),
+                    stats_1.get('FT_PCT', 0)
+                ],
+                player_2_name: [
+                    per_2,
+                    stats_2.get('PTS', 0),
+                    stats_2.get('REB', 0),
+                    stats_2.get('AST', 0),
+                    stats_2.get('STL', 0),
+                    stats_2.get('BLK', 0),
+                    stats_2.get('FG_PCT', 0),
+                    stats_2.get('FG3_PCT', 0),
+                    stats_2.get('FT_PCT', 0)
+                ]
+            })
+            
+            # Add winner column
+            def get_winner_emoji(stat, val1, val2):
+                if stat in ['PER', 'PTS', 'REB', 'AST', 'STL', 'BLK', 'FG%', '3P%', 'FT%']:
+                    if val1 > val2:
+                        return f"🥇 {player_1_name}"
+                    elif val2 > val1:
+                        return f"🥇 {player_2_name}"
+                    else:
+                        return "🤝 Tie"
+                return ""
+            
+            comparison['Winner'] = comparison.apply(
+                lambda row: get_winner_emoji(row['Stat'], row[player_1_name], row[player_2_name]), 
+                axis=1
+            )
+            
+            st.dataframe(comparison, use_container_width=True, hide_index=True)
+            
+            # Overall verdict
+            st.markdown("### 🏆 Overall Verdict")
+            
+            wins_1 = sum(1 for _, row in comparison.iterrows() if player_1_name in row['Winner'])
+            wins_2 = sum(1 for _, row in comparison.iterrows() if player_2_name in row['Winner'])
+            
+            col_v1, col_v2, col_v3 = st.columns(3)
+            with col_v1:
+                st.metric(f"{player_1_name} Wins", wins_1)
+            with col_v2:
+                st.metric("Ties", 9 - wins_1 - wins_2)
+            with col_v3:
+                st.metric(f"{player_2_name} Wins", wins_2)
+            
+            if wins_1 > wins_2:
+                st.success(f"🥇 **{player_1_name} wins the battle!** ({wins_1}-{wins_2})")
+            elif wins_2 > wins_1:
+                st.success(f"🥇 **{player_2_name} wins the battle!** ({wins_2}-{wins_1})")
+            else:
+                st.info(f"🤝 **It's a tie!** Both players are evenly matched")
+            
+            # Radar chart comparison (if we want to add it)
+            st.markdown("### 📈 Performance Over Time")
+            
+            # Combine logs for comparison
+            log_1_recent = log_1.tail(20).copy()
+            log_2_recent = log_2.tail(20).copy()
+            
+            if 'GAME_DATE' in log_1_recent.columns and 'GAME_DATE' in log_2_recent.columns:
+                log_1_recent['GAME_DATE'] = pd.to_datetime(log_1_recent['GAME_DATE'])
+                log_2_recent['GAME_DATE'] = pd.to_datetime(log_2_recent['GAME_DATE'])
+                
+                # Create comparison chart
+                metric_1v1 = st.selectbox("Select metric", ['PER', 'PTS', 'REB', 'AST', 'STL', 'BLK'], key='1v1_metric')
+                
+                comp_data = []
+                for _, row in log_1_recent.iterrows():
+                    if metric_1v1 in row:
+                        comp_data.append({
+                            'Date': row['GAME_DATE'],
+                            'Player': player_1_name,
+                            'Value': row[metric_1v1]
+                        })
+                
+                for _, row in log_2_recent.iterrows():
+                    if metric_1v1 in row:
+                        comp_data.append({
+                            'Date': row['GAME_DATE'],
+                            'Player': player_2_name,
+                            'Value': row[metric_1v1]
+                        })
+                
+                comp_df = pd.DataFrame(comp_data)
+                comp_df['Date'] = pd.to_datetime(comp_df['Date'])
+                
+                chart_1v1 = (
+                    alt.Chart(comp_df)
+                    .mark_line(point=True)
+                    .encode(
+                        x=alt.X('Date:T', title='Game Date'),
+                        y=alt.Y('Value:Q', title=metric_1v1),
+                        color=alt.Color('Player:N', scale=alt.Scale(domain=[player_1_name, player_2_name], range=['#3498db', '#e74c3c'])),
+                        tooltip=[
+                            'Player:N',
+                            alt.Tooltip('Date:T', title='Date'),
+                            alt.Tooltip('Value:Q', format='.2f', title=metric_1v1)
+                        ]
+                    )
+                    .properties(height=350)
+                    .interactive()
+                )
+                
+                st.altair_chart(chart_1v1, use_container_width=True)
+        
+        else:
+            st.info("👆 Search and select two players above to start the battle!")
 
     # =========================
     # Teams Compare
