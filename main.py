@@ -1,3 +1,9 @@
+"""
+NBA Analytics Dashboard
+
+A Streamlit application for analyzing NBA statistics, teams, and players.
+Features standings, team analysis, player explorer, and comparison tools.
+"""
 
 import time
 import numpy as np
@@ -37,9 +43,9 @@ DEFAULT_LAST_N_GAMES = 20
 DEFAULT_ROLLING_WINDOWS = (5, 10)
 
 
-
+# --------------------------------------------------
 # App config
-
+# --------------------------------------------------
 st.set_page_config(
     page_title="NBA Analytics Dashboard",
     page_icon="🏀",
@@ -80,9 +86,9 @@ with st.sidebar.expander("🛠️ Settings", expanded=False):
     show_debug = st.checkbox("Show debug info", value=False)
 
 
-
+# --------------------------------------------------
 # Helper Functions
-
+# --------------------------------------------------
 def throttle(seconds: float = 0.6):
     """Sleep to avoid API rate limits."""
     time.sleep(seconds)
@@ -121,9 +127,9 @@ def metric_row(summary: pd.Series):
     b6.metric("+/-", f"{summary.get('PLUS_MINUS', 0):.1f}" if "PLUS_MINUS" in summary else "—")
 
 
-
+# --------------------------------------------------
 # State Management
-
+# --------------------------------------------------
 state_key = f"{page}:{season}"
 if st.session_state.get("_state_key") != state_key:
     st.session_state["_state_key"] = state_key
@@ -131,8 +137,9 @@ if st.session_state.get("_state_key") != state_key:
     st.session_state.pop("_last_compare_logs", None)
 
 
+# --------------------------------------------------
 # Cached Data Loaders
-
+# --------------------------------------------------
 @st.cache_data(ttl=6 * 60 * 60, persist="disk", show_spinner="Loading standings...")
 def load_standings(season: str) -> pd.DataFrame:
     """Load NBA standings with caching."""
@@ -175,8 +182,9 @@ def load_team_abbr(team_id: int) -> str:
     return get_team_abbr(team_id)
 
 
+# ==================================================
 # PAGE: STANDINGS
-
+# ==================================================
 if page == "Standings":
     st.subheader("📊 NBA Standings")
 
@@ -223,18 +231,18 @@ if page == "Standings":
             st.dataframe(west, use_container_width=True, hide_index=True)
 
 
-
+# ==================================================
 # PAGE: TEAM
-
+# ==================================================
 elif page == "Team":
     st.subheader("🏀 Team Analysis")
 
     teams_df = load_teams_static()
     mode = st.radio("Mode", ["Single Team Analysis", "Compare Teams"], horizontal=True)
 
-    
+    # ==================================================
     # SINGLE TEAM
-   
+    # ==================================================
     if mode == "Single Team Analysis":
         last_n = st.slider("Last N games", 5, 82, DEFAULT_LAST_N_GAMES, key="team_single_last_n")
 
@@ -289,8 +297,9 @@ elif page == "Team":
                 for c in chart_cols:
                     st.line_chart(g[[c]], use_container_width=True)
 
+    # ==================================================
     # COMPARE TEAMS
-
+    # ==================================================
     else:
         picks = st.multiselect(
             "Select teams to compare",
@@ -460,7 +469,7 @@ elif page == "Team":
         st.bar_chart(avg_df, use_container_width=True)
 
 
-
+# ==================================================
 # PAGE: PLAYER EXPLORER
 # ==================================================
 elif page == "Player Explorer":
@@ -604,7 +613,7 @@ elif page == "Player Explorer":
         st.dataframe(log, use_container_width=True, hide_index=True)
 
 
-
+# ==================================================
 # PAGE: COMPARE & SYNERGY
 # ==================================================
 else:
@@ -612,9 +621,9 @@ else:
 
     t_players, t_teams = st.tabs(["👥 Players Compare", "🏀 Teams Compare"])
 
-
+    # =========================
     # Players Compare
-
+    # =========================
     with t_players:
         st.write("Add players to a pool, organize into groups, filter by date, and analyze synergy.")
 
@@ -645,11 +654,25 @@ else:
                     st.warning("No results found.")
                 else:
                     st.dataframe(res, use_container_width=True, hide_index=True)
-                    pick = st.selectbox("Pick player to add", res["full_name"].tolist(), key="cmp_pick_global")
-                    pid = int(res.loc[res["full_name"] == pick, "id"].iloc[0])
-                    if st.button("➕ Add to pool"):
-                        st.session_state.pool[pick] = pid
-                        st.rerun()
+                    
+                    # Show available players to add
+                    available_players = [p for p in res["full_name"].tolist() if p not in st.session_state.pool]
+                    
+                    if not available_players:
+                        st.info("All players from this search are already in the pool!")
+                    else:
+                        picks_to_add = st.multiselect(
+                            "Select players to add to pool",
+                            available_players,
+                            key="cmp_pick_global"
+                        )
+                        
+                        if st.button("➕ Add Selected to Pool", key="add_btn"):
+                            for pick in picks_to_add:
+                                pid = int(res.loc[res["full_name"] == pick, "id"].iloc[0])
+                                st.session_state.pool[pick] = pid
+                            st.success(f"Added {len(picks_to_add)} player(s) to pool!")
+                            st.rerun()
 
         # Add players - Team Roster
         else:
@@ -821,13 +844,47 @@ else:
         sA = group_summary(logs_a)
         sB = group_summary(logs_b)
         
+        # Add combined stats row for each group (if more than 1 player)
+        def add_combined_row(summary_df):
+            if len(summary_df) <= 1:
+                return summary_df
+            
+            # Separate percentage columns from counting stats
+            percentage_cols = ["FG_PCT", "FG3_PCT", "FT_PCT"]
+            counting_cols = [c for c in summary_df.columns if c not in ["Player", "Games"] + percentage_cols]
+            
+            combined_row = {"Player": "COMBINED", "Games": int(summary_df["Games"].sum())}
+            
+            # For counting stats: sum them
+            for col in counting_cols:
+                if col in summary_df.columns:
+                    combined_row[col] = summary_df[col].sum()
+            
+            # For percentages: weighted average by games played
+            for col in percentage_cols:
+                if col in summary_df.columns:
+                    # Weighted average: (val1*games1 + val2*games2) / total_games
+                    total_games = summary_df["Games"].sum()
+                    if total_games > 0:
+                        weighted_sum = (summary_df[col] * summary_df["Games"]).sum()
+                        combined_row[col] = weighted_sum / total_games
+                    else:
+                        combined_row[col] = 0
+            
+            # Add combined row at the top
+            combined_df = pd.DataFrame([combined_row])
+            return pd.concat([combined_df, summary_df], ignore_index=True)
+        
+        sA_with_combined = add_combined_row(sA)
+        sB_with_combined = add_combined_row(sB)
+        
         ca, cb = st.columns(2)
         with ca:
             st.markdown("### Group A")
-            st.dataframe(sA, use_container_width=True, hide_index=True)
+            st.dataframe(sA_with_combined, use_container_width=True, hide_index=True)
         with cb:
             st.markdown("### Group B")
-            st.dataframe(sB, use_container_width=True, hide_index=True)
+            st.dataframe(sB_with_combined, use_container_width=True, hide_index=True)
 
         # Comparison charts
         st.markdown("## 📈 Group Comparison Over Time")
@@ -1014,9 +1071,9 @@ else:
             corr = synergy_matrix(all_logs, metric_for_synergy)
             st.dataframe(corr, use_container_width=True)
 
-
+    # =========================
     # Teams Compare
-
+    # =========================
     with t_teams:
         st.write("Compare 2 teams using recent game statistics.")
 
